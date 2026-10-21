@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Type 2 Diabetes & Lipid Profile Prediction System</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #eef3f2;
+            --surface: #ffffff;
+            --ink: #12302f;
+            --ink-soft: #5b7270;
+            --line: #d9e4e2;
+            --brand: #0e6b66;
+            --brand-deep: #0a3f3d;
+            --brand-tint: #e1f0ee;
+            --focus: #14a39a;
+        }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'Figtree', system-ui, sans-serif;
+            background:
+                radial-gradient(1100px 500px at 85% -10%, #d7ebe8 0%, transparent 60%),
+                var(--bg);
+            color: var(--ink);
+        }
+        .display { font-family: 'Fraunces', Georgia, serif; letter-spacing: -0.015em; }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            box-shadow: 0 1px 2px rgba(18, 48, 47, .04), 0 12px 32px -16px rgba(18, 48, 47, .18);
+        }
+
+        /* Form fields */
+        .field-label { display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+        .field-wrap { position: relative; }
+        .field-wrap input {
+            width: 100%;
+            background: #f7faf9;
+            border: 1.5px solid var(--line);
+            border-radius: 12px;
+            padding: 11px 64px 11px 14px;
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--ink);
+            transition: border-color .15s, box-shadow .15s, background .15s;
+        }
+        .field-wrap input:hover { border-color: #b9ccc9; }
+        .field-wrap input:focus {
+            outline: none;
+            background: #fff;
+            border-color: var(--focus);
+            box-shadow: 0 0 0 4px rgba(20, 163, 154, .16);
+        }
+        .field-unit {
+            position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+            font-size: 12px; color: var(--ink-soft); pointer-events: none;
+        }
+        .group-title {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 14px; font-weight: 700; color: var(--brand-deep);
+            margin-bottom: 14px;
+        }
+        .group-title span.dot {
+            width: 28px; height: 28px; border-radius: 9px;
+            display: grid; place-items: center;
+            background: var(--brand-tint); color: var(--brand);
+        }
+
+        .cta {
+            background: linear-gradient(180deg, #11827b, var(--brand));
+            color: #fff;
+            border-radius: 14px;
+            box-shadow: 0 10px 24px -10px rgba(14, 107, 102, .7), inset 0 1px 0 rgba(255,255,255,.18);
+            transition: transform .12s ease, box-shadow .2s ease, filter .2s;
+        }
+        .cta:hover { filter: brightness(1.06); box-shadow: 0 14px 28px -10px rgba(14, 107, 102, .8), inset 0 1px 0 rgba(255,255,255,.18); }
+        .cta:active { transform: translateY(1px) scale(.995); }
+        .cta:focus-visible { outline: 3px solid rgba(20,163,154,.4); outline-offset: 3px; }
+
+        /* Diagnosis hero */
+        .hero {
+            border-radius: 24px;
+            color: #eaf6f4;
+            background:
+                radial-gradient(520px 260px at 100% 0%, rgba(45, 190, 176, .35), transparent 65%),
+                linear-gradient(135deg, var(--brand-deep), #0d4f4c 60%, #0f5e59);
+            box-shadow: 0 24px 40px -24px rgba(10, 63, 61, .7);
+            position: relative; overflow: hidden;
+        }
+        .hero::after {
+            content: ""; position: absolute; right: -40px; bottom: -60px;
+            width: 220px; height: 220px; border-radius: 50%;
+            border: 28px solid rgba(255,255,255,.05);
+        }
+
+        .metric-bar { width: 4px; border-radius: 4px; align-self: stretch; }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; scroll-behavior: auto !important; }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- Header / Navbar -->
+    <header class="max-w-7xl mx-auto px-6 pt-8 pb-2">
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl grid place-items-center text-white" style="background: linear-gradient(135deg,#11827b,#0a3f3d);">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg>
+                </div>
+                <div>
+                    <h1 class="display text-2xl sm:text-[28px] font-semibold leading-tight">Type 2 Diabetes &amp; Lipid Risk Portal</h1>
+                    <p class="text-sm" style="color:var(--ink-soft)">Enter a patient's clinical values to estimate diabetic status.</p>
+                </div>
+            </div>
+            <span class="hidden sm:inline-flex items-center gap-2 text-xs font-semibold px-3.5 py-1.5 rounded-full" style="background:var(--brand-tint);color:var(--brand-deep)">
+                <span class="w-2 h-2 rounded-full" style="background:var(--focus)"></span>
+                Machine Learning System
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
+        <!-- Column 1: Patient Input Form -->
+        <section class="lg:col-span-1 card p-6 lg:sticky lg:top-6">
+            <h2 class="display text-xl font-semibold mb-1">Patient Clinical Inputs</h2>
+            <p class="text-sm mb-6" style="color:var(--ink-soft)">Lipid values in mmol/L.</p>
+
+            <form id="predictionForm" class="space-y-7">
+
+                <div>
+                    <div class="group-title">
+                        <span class="dot">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M5 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/></svg>
+                        </span>
+                        Patient profile
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="field-label" for="age">Age</label>
+                            <div class="field-wrap">
+                                <input type="number" id="age" value="45" min="10" max="100" required>
+                                <span class="field-unit">years</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="field-label" for="bmi">BMI</label>
+                            <div class="field-wrap">
+                                <input type="number" step="0.1" id="bmi" value="25.5" required>
+                                <span class="field-unit">kg/m²</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="group-title">
+                        <span class="dot">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11z"/></svg>
+                        </span>
+                        Lipid profile
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="field-label" for="hdl">HDL</label>
+                            <div class="field-wrap">
+                                <input type="number" step="0.1" id="hdl" value="1.2" required>
+                                <span class="field-unit">mmol/L</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="field-label" for="ldl">LDL</label>
+                            <div class="field-wrap">
+                                <input type="number" step="0.1" id="ldl" value="2.5" required>
+                                <span class="field-unit">mmol/L</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="field-label" for="tg">Triglycerides</label>
+                            <div class="field-wrap">
+                                <input type="number" step="0.1" id="tg" value="2.0" required>
+                                <span class="field-unit">mmol/L</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="field-label" for="chol">Total cholesterol</label>
+                            <div class="field-wrap">
+                                <input type="number" step="0.1" id="chol" value="4.8" required>
+                                <span class="field-unit">mmol/L</span>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <label class="field-label" for="vldl">VLDL</label>
+                            <div class="field-wrap">
+                                <input type="number" step="0.1" id="vldl" value="0.9" required>
+                                <span class="field-unit">mmol/L</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" onclick="runPrediction()" class="cta w-full font-semibold py-3.5 text-[15px]">
+    Run ML Prediction & Render Charts
+</button>
+            </form>
+        </section>
+
+        <!-- Column 2 & 3: Results Dashboard & Visualizations -->
+        <section class="lg:col-span-2 space-y-6">
+
+            <!-- Diagnosis Summary Cards -->
+            <div class="hero p-7 sm:p-8">
+                <span class="text-sm font-medium" style="color:#9fd6d0">Mapped Diagnosis</span>
+                <h3 id="diagnosisText" class="display text-3xl sm:text-4xl font-semibold mt-2 relative z-10">Ready for Input</h3>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="card p-5 flex gap-4">
+                    <div class="metric-bar" style="background:#8b5cf6"></div>
+                    <div>
+                        <span class="text-sm font-medium" style="color:var(--ink-soft)">Derived TG/HDL Ratio</span>
+                        <h3 id="tgHdlText" class="display text-3xl font-semibold mt-1">--</h3>
+                    </div>
+                </div>
+                <div class="card p-5 flex gap-4">
+                    <div class="metric-bar" style="background:#10b981"></div>
+                    <div>
+                        <span class="text-sm font-medium" style="color:var(--ink-soft)">Calculated Non-HDL</span>
+                        <h3 id="nonHdlText" class="display text-3xl font-semibold mt-1">--</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Probability Bar Chart Container -->
+            <div class="card p-6">
+                <h3 class="display text-lg font-semibold">Predicted Risk Probability Distribution</h3>
+                <p class="text-sm mb-5" style="color:var(--ink-soft)">Model confidence for each diagnosis class, in percent.</p>
+                <div class="h-64 relative">
+                    <canvas id="riskChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Power BI Report Embedding Container -->
+            <div class="card p-6">
+                <h3 class="display text-lg font-semibold">Dataset Analytics (Power BI Dashboard)</h3>
+                <p class="text-sm mb-5" style="color:var(--ink-soft)">Interactive dataset-wide class breakdown and demographic distribution.</p>
+                <div id="powerBiContainer" class="w-full h-80 rounded-2xl flex items-center justify-center border-2 border-dashed" style="background:#f4f8f7;border-color:#c5d8d5">
+                    <p class="text-sm text-center" style="color:var(--ink-soft)">
+                        📌 Embedded Power BI Report Area<br>
+                        <span class="text-xs">(Replace `iframe` URL with your Power BI Publish-to-Web link)</span>
+                    </p>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- JavaScript Logic -->
+    <script>
+        let myChart = null;
+
+        async function runPrediction() {
+            // 1. Extract raw inputs from form fields
+            const payload = {
+                age: parseFloat(document.getElementById('age').value),
+                bmi: parseFloat(document.getElementById('bmi').value),
+                hdl: parseFloat(document.getElementById('hdl').value),
+                ldl: parseFloat(document.getElementById('ldl').value),
+                tg: parseFloat(document.getElementById('tg').value),
+                chol: parseFloat(document.getElementById('chol').value),
+                vldl: parseFloat(document.getElementById('vldl').value)
+            };
+
+            try {
+                // 2. Make asynchronous fetch request to Python Flask backend
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to get prediction from backend.");
+                }
+
+                const result = await response.json();
+
+                // 3. Update Text UI with backend calculations & predictions
+                document.getElementById('tgHdlText').innerText = result.tg_hdl.toFixed(2);
+                document.getElementById('nonHdlText').innerText = `${result.non_hdl.toFixed(2)} mmol/L`;
+
+                const labels = {
+                    0: "Non-Diabetic (Low Risk)", 
+                    1: "Pre-Diabetic (Moderate Risk)", 
+                    2: "Diabetic (High Risk)"
+                };
+                document.getElementById('diagnosisText').innerText = labels[result.class];
+
+                // 4. Render Chart with probabilities returned from ML model
+                renderChart(result.probs);
+
+            } catch (error) {
+                console.error("Error connecting to Python backend:", error);
+                alert("Could not connect to the backend server. Make sure your Flask app.py is running!");
+            }
+        }
+
+        function renderChart(probabilities) {
+            const ctx = document.getElementById('riskChart').getContext('2d');
+
+            if (myChart) {
+                myChart.destroy();
+            }
+
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Non-Diabetic', 'Pre-Diabetic', 'Diabetic'],
+                    datasets: [{
+                        label: 'Probability (%)',
+                        data: probabilities,
+                        backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, max: 100 }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // Render empty chart on page load
+        window.onload = function() {
+            renderChart([0, 0, 0]);
+        };
+    </script>
+</body>
+</html>
