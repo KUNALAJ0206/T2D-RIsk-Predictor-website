@@ -6,8 +6,9 @@
     <title>Type 2 Diabetes & Lipid Profile Prediction System</title>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js for data visualization -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Three.js for the 3D human figure -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -106,6 +107,33 @@
         }
 
         .metric-bar { width: 4px; border-radius: 4px; align-self: stretch; }
+
+        /* Humanoid probability figure */
+        .fill-rect { transition: y .9s cubic-bezier(.2,.7,.2,1), height .9s cubic-bezier(.2,.7,.2,1); }
+        .legend-row { padding: 12px 14px; border-radius: 14px; border: 1.5px solid transparent; transition: background .2s, border-color .2s; }
+        .legend-row.is-top { background: var(--brand-tint); border-color: #b5dcd7; }
+        .legend-track { height: 6px; border-radius: 6px; background: #e3ecea; overflow: hidden; }
+        .legend-track > div { height: 100%; border-radius: 6px; width: 0; transition: width .9s cubic-bezier(.2,.7,.2,1); }
+
+        /* 3D body view + floating risk badges */
+        #riskChart { position: relative; height: 460px; border-radius: 18px; overflow: hidden;
+            background: radial-gradient(circle at 50% 45%, #f3f9f8 0%, #e3eeec 100%); cursor: grab; touch-action: pan-y; }
+        #riskChart:active { cursor: grabbing; }
+        #riskChart canvas { display: block; }
+        .risk-badge {
+            position: absolute; left: 0; top: 0; pointer-events: none;
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 14px 8px 10px; border-radius: 14px;
+            background: rgba(255,255,255,.94); border: 1.5px solid var(--line);
+            box-shadow: 0 10px 24px -12px rgba(18,48,47,.35);
+            transition: border-color .2s, box-shadow .2s;
+            white-space: nowrap;
+        }
+        .risk-badge .sw { width: 12px; height: 12px; border-radius: 50%; }
+        .risk-badge .nm { font-size: 12px; font-weight: 600; color: var(--ink-soft); line-height: 1.1; }
+        .risk-badge .pc { font-size: 20px; font-weight: 600; line-height: 1.15; }
+        .risk-badge.is-top { border-color: var(--ink); box-shadow: 0 14px 28px -12px rgba(18,48,47,.5); }
+        .body-hint { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; font-size: 12px; color: var(--ink-soft); pointer-events: none; }
 
         @media (prefers-reduced-motion: reduce) {
             * { transition: none !important; scroll-behavior: auto !important; }
@@ -249,10 +277,8 @@
             <!-- Probability Bar Chart Container -->
             <div class="card p-6">
                 <h3 class="display text-lg font-semibold">Predicted Risk Probability Distribution</h3>
-                <p class="text-sm mb-5" style="color:var(--ink-soft)">Model confidence for each diagnosis class, in percent.</p>
-                <div class="h-64 relative">
-                    <canvas id="riskChart"></canvas>
-                </div>
+                <p class="text-sm mb-6" style="color:var(--ink-soft)">The pancreas, liver and abdomen glow by predicted risk level. Drag to rotate.</p>
+                <div id="riskChart"></div>
             </div>
 
             <!-- Power BI Report Embedding Container -->
@@ -272,7 +298,7 @@
 
     <!-- JavaScript Logic -->
     <script>
-        let myChart = null;
+        let bodyScene = null;
 
         async function runPrediction() {
             // 1. Extract raw inputs from form fields
@@ -322,33 +348,157 @@
             }
         }
 
-        function renderChart(probabilities) {
-            const ctx = document.getElementById('riskChart').getContext('2d');
-
-            if (myChart) {
-                myChart.destroy();
+        function buildBodyScene(host, classes) {
+            host.innerHTML = '';
+            let renderer;
+            try {
+                renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            } catch (e) {
+                host.innerHTML = '<p class="text-sm p-6" style="color:var(--ink-soft)">3D view is not supported in this browser.</p>';
+                return { update() {} };
             }
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            host.appendChild(renderer.domElement);
 
-            myChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Non-Diabetic', 'Pre-Diabetic', 'Diabetic'],
-                    datasets: [{
-                        label: 'Probability (%)',
-                        data: probabilities,
-                        backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'],
-                        borderRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { beginAtZero: true, max: 100 }
-                    },
-                    plugins: { legend: { display: false } }
-                }
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+            camera.position.set(0, 0.5, 11);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+            const key = new THREE.DirectionalLight(0xffffff, 0.7);
+            key.position.set(3, 5, 6);
+            scene.add(key);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, -0.1, 0);
+            controls.enableZoom = false;
+            controls.enablePan = false;
+            controls.enableDamping = true;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 1.1;
+            controls.minPolarAngle = Math.PI / 2.6;
+            controls.maxPolarAngle = Math.PI / 1.8;
+            controls.addEventListener('start', () => { controls.autoRotate = false; });
+
+            // Glass-like body
+            const shell = new THREE.MeshPhongMaterial({ color: 0x7fb7b1, transparent: true, opacity: 0.26, shininess: 90, depthWrite: false });
+            const rim = new THREE.MeshBasicMaterial({ color: 0x0a3f3d, transparent: true, opacity: 0.18, side: THREE.BackSide, depthWrite: false });
+            const body = new THREE.Group();
+            scene.add(body);
+
+            function part(geo, x, y, z, sx, sy, sz, rz) {
+                [rim, shell].forEach((m, i) => {
+                    const mesh = new THREE.Mesh(geo, m);
+                    mesh.position.set(x, y, z);
+                    mesh.scale.set(sx || 1, sy || 1, sz || 1);
+                    mesh.rotation.z = rz || 0;
+                    mesh.renderOrder = i;
+                    body.add(mesh);
+                });
+            }
+            part(new THREE.SphereGeometry(0.38, 32, 24), 0, 1.85, 0, 0.9, 1.1, 0.95);          // head
+            part(new THREE.CylinderGeometry(0.13, 0.16, 0.3, 20), 0, 1.5, 0);                 // neck
+            part(new THREE.CylinderGeometry(0.62, 0.5, 1.7, 32), 0, 0.55, 0, 1, 1, 0.62);     // torso
+            part(new THREE.SphereGeometry(0.52, 28, 20), 0, -0.4, 0, 1, 0.7, 0.7);            // pelvis
+            [-1, 1].forEach(side => {
+                part(new THREE.SphereGeometry(0.2, 20, 16), side * 0.7, 1.28, 0);              // shoulder
+                part(new THREE.CylinderGeometry(0.13, 0.1, 1.5, 20), side * 0.9, 0.55, 0, 1, 1, 1, -side * 0.08); // arm
+                part(new THREE.SphereGeometry(0.11, 16, 12), side * 0.99, -0.22, 0);           // hand
+                part(new THREE.CylinderGeometry(0.2, 0.13, 2.0, 24), side * 0.26, -1.55, 0);   // leg
+                part(new THREE.SphereGeometry(0.16, 16, 12), side * 0.26, -2.6, 0.08, 1, 0.6, 1.5); // foot
             });
+
+            // Metabolic zones
+            const NEUTRAL = 0x8fa9a6;
+            const zoneMats = [];
+            function zone(x, y, z, sx, sy, sz, rz) {
+                const mat = new THREE.MeshPhongMaterial({ color: NEUTRAL, emissive: NEUTRAL, emissiveIntensity: 0.25, shininess: 60 });
+                const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), mat);
+                mesh.position.set(x, y, z);
+                mesh.scale.set(sx, sy, sz);
+                mesh.rotation.z = rz || 0;
+                mesh.renderOrder = 2;
+                body.add(mesh);
+                zoneMats.push(mat);
+                return new THREE.Vector3(x, y, z);
+            }
+            const liverPos    = zone(-0.28, 0.8, 0.06, 0.36, 0.2, 0.2, 0.25);
+            const pancreasPos = zone(0, 0.5, -0.02, 0.42, 0.07, 0.1, -0.1);
+            const abdomenPos  = zone(0, -0.1, 0.1, 0.42, 0.3, 0.2);
+
+            // Floating badges: Non-Diabetic at liver, Pre-Diabetic at abdomen, Diabetic at pancreas
+            const anchors = [
+                { pos: liverPos,    dx: -150, dy: -60 },
+                { pos: abdomenPos,  dx:  150, dy:  70 },
+                { pos: pancreasPos, dx:  150, dy: -50 }
+            ];
+            const badges = classes.map((c, i) => {
+                const el = document.createElement('div');
+                el.className = 'risk-badge';
+                el.innerHTML = `<span class="sw" style="background:${c.color}"></span>
+                    <div><div class="nm">${c.name}</div><div class="pc display">0.0%</div></div>`;
+                host.appendChild(el);
+                return el;
+            });
+            const hint = document.createElement('div');
+            hint.className = 'body-hint';
+            hint.textContent = 'Drag to rotate';
+            host.appendChild(hint);
+
+            let w = 1, h = 1, intensity = 0.25, hasResult = false;
+            function resize() {
+                w = host.clientWidth || 1; h = host.clientHeight || 1;
+                renderer.setSize(w, h);
+                camera.aspect = w / h;
+                camera.updateProjectionMatrix();
+            }
+            resize();
+            new ResizeObserver(resize).observe(host);
+
+            function frame(t) {
+                requestAnimationFrame(frame);
+                controls.update();
+                const pulse = hasResult ? 0.7 + 0.3 * Math.sin(t / 380) : 0.25;
+                zoneMats.forEach(m => { m.emissiveIntensity = pulse; });
+                const k = Math.min(1, w / 560);
+                anchors.forEach((a, i) => {
+                    const v = a.pos.clone().project(camera);
+                    const x = (v.x * 0.5 + 0.5) * w + a.dx * k;
+                    const y = (-v.y * 0.5 + 0.5) * h + a.dy * k;
+                    badges[i].style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+                });
+                renderer.render(scene, camera);
+            }
+            requestAnimationFrame(frame);
+
+            return {
+                update(probs) {
+                    const sum = probs.reduce((a, b) => a + b, 0);
+                    let top = -1;
+                    if (sum > 0) top = probs.indexOf(Math.max(...probs));
+                    hasResult = top >= 0;
+                    const col = new THREE.Color(hasResult ? classes[top].color : NEUTRAL);
+                    zoneMats.forEach(m => { m.color.copy(col); m.emissive.copy(col); });
+                    badges.forEach((el, i) => {
+                        el.querySelector('.pc').innerText = probs[i].toFixed(1) + '%';
+                        el.classList.toggle('is-top', i === top);
+                    });
+                }
+            };
+        }
+
+        function renderChart(probabilities) {
+            const host = document.getElementById('riskChart');
+            const classes = [
+                { name: 'Non-Diabetic', color: '#22c55e' },
+                { name: 'Pre-Diabetic', color: '#f59e0b' },
+                { name: 'Diabetic', color: '#ef4444' }
+            ];
+            if (!bodyScene) {
+                bodyScene = buildBodyScene(host, classes);
+            }
+            const probs = [0, 1, 2].map(i => Math.max(0, Math.min(100, Number(probabilities[i]) || 0)));
+            bodyScene.update(probs);
         }
 
         // Render empty chart on page load
