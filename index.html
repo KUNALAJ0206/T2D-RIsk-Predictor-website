@@ -277,7 +277,7 @@
             <!-- Probability Bar Chart Container -->
             <div class="card p-6">
                 <h3 class="display text-lg font-semibold">Predicted Risk Probability Distribution</h3>
-                <p class="text-sm mb-6" style="color:var(--ink-soft)">The pancreas, liver and abdomen glow by predicted risk level. Drag to rotate.</p>
+                <p class="text-sm mb-6" style="color:var(--ink-soft)">The body fills like liquid: the height of each color is its share of the predicted risk. Drag to rotate.</p>
                 <div id="riskChart"></div>
             </div>
 
@@ -358,19 +358,20 @@
                 return { update() {} };
             }
             renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            renderer.localClippingEnabled = true;
             host.appendChild(renderer.domElement);
 
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
             camera.position.set(0, 0.5, 11);
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-            const key = new THREE.DirectionalLight(0xffffff, 0.7);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            const key = new THREE.DirectionalLight(0xffffff, 0.6);
             key.position.set(3, 5, 6);
             scene.add(key);
 
             const controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, -0.1, 0);
+            controls.target.set(0, -0.2, 0);
             controls.enableZoom = false;
             controls.enablePan = false;
             controls.enableDamping = true;
@@ -380,20 +381,41 @@
             controls.maxPolarAngle = Math.PI / 1.8;
             controls.addEventListener('start', () => { controls.autoRotate = false; });
 
-            // Glass-like body
-            const shell = new THREE.MeshPhongMaterial({ color: 0x7fb7b1, transparent: true, opacity: 0.26, shininess: 90, depthWrite: false });
-            const rim = new THREE.MeshBasicMaterial({ color: 0x0a3f3d, transparent: true, opacity: 0.18, side: THREE.BackSide, depthWrite: false });
+            // Liquid: one clipped copy of the body per color, stacked from the feet up
+            const BOTTOM = -2.75, TOTAL = 5.05;
+            const bands = classes.map(c => {
+                const lo = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                const hi = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
+                const mat = new THREE.MeshPhongMaterial({
+                    color: c.color, emissive: c.color, emissiveIntensity: 0.18, shininess: 70,
+                    side: THREE.DoubleSide, clippingPlanes: [lo, hi]
+                });
+                return { lo, hi, mat, meshes: [] };
+            });
+
+            // Glass shell
+            const shell = new THREE.MeshPhongMaterial({ color: 0x9ccbc6, transparent: true, opacity: 0.22, shininess: 90, depthWrite: false });
+            const rim = new THREE.MeshBasicMaterial({ color: 0x0a3f3d, transparent: true, opacity: 0.22, side: THREE.BackSide, depthWrite: false });
             const body = new THREE.Group();
             scene.add(body);
 
             function part(geo, x, y, z, sx, sy, sz, rz) {
-                [rim, shell].forEach((m, i) => {
-                    const mesh = new THREE.Mesh(geo, m);
-                    mesh.position.set(x, y, z);
-                    mesh.scale.set(sx || 1, sy || 1, sz || 1);
-                    mesh.rotation.z = rz || 0;
-                    mesh.renderOrder = i;
-                    body.add(mesh);
+                sx = sx || 1; sy = sy || 1; sz = sz || 1; rz = rz || 0;
+                bands.forEach(b => {
+                    const m = new THREE.Mesh(geo, b.mat);
+                    m.position.set(x, y, z);
+                    m.scale.set(sx * 0.94, sy * 0.94, sz * 0.94);
+                    m.rotation.z = rz;
+                    b.meshes.push(m);
+                    body.add(m);
+                });
+                [rim, shell].forEach((mat, i) => {
+                    const m = new THREE.Mesh(geo, mat);
+                    m.position.set(x, y, z);
+                    m.scale.set(sx, sy, sz);
+                    m.rotation.z = rz;
+                    m.renderOrder = 1 + i;
+                    body.add(m);
                 });
             }
             part(new THREE.SphereGeometry(0.38, 32, 24), 0, 1.85, 0, 0.9, 1.1, 0.95);          // head
@@ -408,30 +430,8 @@
                 part(new THREE.SphereGeometry(0.16, 16, 12), side * 0.26, -2.6, 0.08, 1, 0.6, 1.5); // foot
             });
 
-            // Metabolic zones
-            const NEUTRAL = 0x8fa9a6;
-            const zoneMats = [];
-            function zone(x, y, z, sx, sy, sz, rz) {
-                const mat = new THREE.MeshPhongMaterial({ color: NEUTRAL, emissive: NEUTRAL, emissiveIntensity: 0.25, shininess: 60 });
-                const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), mat);
-                mesh.position.set(x, y, z);
-                mesh.scale.set(sx, sy, sz);
-                mesh.rotation.z = rz || 0;
-                mesh.renderOrder = 2;
-                body.add(mesh);
-                zoneMats.push(mat);
-                return new THREE.Vector3(x, y, z);
-            }
-            const liverPos    = zone(-0.28, 0.8, 0.06, 0.36, 0.2, 0.2, 0.25);
-            const pancreasPos = zone(0, 0.5, -0.02, 0.42, 0.07, 0.1, -0.1);
-            const abdomenPos  = zone(0, -0.1, 0.1, 0.42, 0.3, 0.2);
-
-            // Floating badges: Non-Diabetic at liver, Pre-Diabetic at abdomen, Diabetic at pancreas
-            const anchors = [
-                { pos: liverPos,    dx: -150, dy: -60 },
-                { pos: abdomenPos,  dx:  150, dy:  70 },
-                { pos: pancreasPos, dx:  150, dy: -50 }
-            ];
+            // Floating badges, stacked in the same order the liquid stacks (green bottom, red top)
+            const badgeOffsets = [95, 0, -95];
             const badges = classes.map((c, i) => {
                 const el = document.createElement('div');
                 el.className = 'risk-badge';
@@ -445,7 +445,11 @@
             hint.textContent = 'Drag to rotate';
             host.appendChild(hint);
 
-            let w = 1, h = 1, intensity = 0.25, hasResult = false;
+            const cur = [BOTTOM, BOTTOM, BOTTOM, BOTTOM];
+            let tgt = [BOTTOM, BOTTOM, BOTTOM, BOTTOM];
+            const center = new THREE.Vector3(0, -0.2, 0);
+
+            let w = 1, h = 1;
             function resize() {
                 w = host.clientWidth || 1; h = host.clientHeight || 1;
                 renderer.setSize(w, h);
@@ -455,17 +459,21 @@
             resize();
             new ResizeObserver(resize).observe(host);
 
-            function frame(t) {
+            function frame() {
                 requestAnimationFrame(frame);
                 controls.update();
-                const pulse = hasResult ? 0.7 + 0.3 * Math.sin(t / 380) : 0.25;
-                zoneMats.forEach(m => { m.emissiveIntensity = pulse; });
+                for (let j = 0; j < 4; j++) cur[j] += (tgt[j] - cur[j]) * 0.07;
+                bands.forEach((b, i) => {
+                    b.lo.constant = -cur[i];
+                    b.hi.constant = cur[i + 1];
+                    const on = cur[i + 1] - cur[i] > 0.01;
+                    b.meshes.forEach(m => { m.visible = on; });
+                });
+                const c = center.clone().project(camera);
+                const cx = (c.x * 0.5 + 0.5) * w, cy = (-c.y * 0.5 + 0.5) * h;
                 const k = Math.min(1, w / 560);
-                anchors.forEach((a, i) => {
-                    const v = a.pos.clone().project(camera);
-                    const x = (v.x * 0.5 + 0.5) * w + a.dx * k;
-                    const y = (-v.y * 0.5 + 0.5) * h + a.dy * k;
-                    badges[i].style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+                badges.forEach((el, i) => {
+                    el.style.transform = `translate(${cx + 150 * k}px, ${cy + badgeOffsets[i] * k}px) translate(-50%, -50%)`;
                 });
                 renderer.render(scene, camera);
             }
@@ -474,11 +482,10 @@
             return {
                 update(probs) {
                     const sum = probs.reduce((a, b) => a + b, 0);
-                    let top = -1;
-                    if (sum > 0) top = probs.indexOf(Math.max(...probs));
-                    hasResult = top >= 0;
-                    const col = new THREE.Color(hasResult ? classes[top].color : NEUTRAL);
-                    zoneMats.forEach(m => { m.color.copy(col); m.emissive.copy(col); });
+                    const top = sum > 0 ? probs.indexOf(Math.max(...probs)) : -1;
+                    let level = BOTTOM;
+                    tgt = [level];
+                    probs.forEach(p => { level += TOTAL * p / 100; tgt.push(level); });
                     badges.forEach((el, i) => {
                         el.querySelector('.pc').innerText = probs[i].toFixed(1) + '%';
                         el.classList.toggle('is-top', i === top);
